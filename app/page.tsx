@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Coins, Plug, ShoppingBag, LineChart as ChartIcon } from "lucide-react";
+import { loadCoinState, saveCoinState, maybeAutoAward } from "@/lib/coin";
+import { useRouter } from "next/navigation"; 
 import { Download, Leaf, Filter, ChevronRight, X, Bell, Gift, Plus, Calendar, TrendingUp, TrendingDown, Award } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -262,24 +265,74 @@ function TrendChart({ data }:{data:{d:string; g:number}[]}) {
   );
 }
 
+// 색상 팔레트 (그대로 사용)
+const PIE_COLORS = [
+  "#10b981", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6",
+  "#14b8a6", "#0ea5e9", "#84cc16", "#f97316", "#ec4899",
+];
+
 function CategoryPie({ top }: { top: TopCat[] }) {
-  const data = top.map((t) => ({ name: t.category_id, value: t.gco2e }));
+  const LABELS: Record<string, string> = {}; // 필요시 id→라벨 매핑
+
+  const data = (top ?? []).map((t) => ({
+    name: LABELS[t.category_id] ?? t.category_id,
+    value: Number(t.gco2e ?? 0),
+  }));
+
+  const total = data.reduce((acc, d) => acc + d.value, 0);
+  const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
+
   return (
     <Card className="rounded-2xl shadow-sm">
-      <CardContent className="p-4">
-        <div className="text-sm opacity-70 mb-2">상위 카테고리</div>
-        <div className="h-52">
+      {/* ⬇️ 패딩을 p-3로 줄여서 카드 높이 축소 */}
+      <CardContent className="p-3">
+        <div className="flex items-center justify-between">
+          {/* ⬇️ 타이틀 폰트도 살짝 줄임 */}
+          <div className="text-xs opacity-70">상위 카테고리</div>
+          {/* ⬇️ 총합은 작은 화면에서 숨김 */}
+          <div className="text-[11px] text-muted-foreground hidden sm:block">
+            {total.toLocaleString()} gCO2e
+          </div>
+        </div>
+
+        {/* ⬇️ 차트 영역 자체 높이를 축소 (이전 280/320 → 200/220) */}
+        <div className="h-[200px] md:h-[220px]">
           <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie dataKey="value" data={data} outerRadius={84}>
-                {data.map((_, i) => (<Cell key={i} />))}
+            {/* ⬇️ 여백도 작게 */}
+            <PieChart margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+              {/* ⬇️ 반지름 축소: inner 56 / outer 92 */}
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={56}
+                outerRadius={92}
+                strokeWidth={0}
+              >
+                {data.map((_, i) => (
+                  <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                ))}
               </Pie>
-              <ReTooltip formatter={(v: unknown, n: unknown) => [`${v} g`, String(n)]} />
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <div className="flex gap-2 mt-2 flex-wrap">
-          {data.map((d, i) => (<Badge key={i} variant="outline" className="rounded-full">{d.name}</Badge>))}
+
+        {/* ⬇️ 배지도 더 콤팩트 (간격·폰트·패딩 축소), 너무 많으면 6개까지만 표시 */}
+        <div className="flex gap-1.5 mt-2 flex-wrap">
+          {data.slice(0, 6).map((d, i) => (
+            <span
+              key={i}
+              className="px-1.5 py-0.5 rounded-full text-[10px]"
+              style={{
+                backgroundColor: PIE_COLORS[i % PIE_COLORS.length],
+                color: "white",
+              }}
+            >
+              {d.name} {pct(d.value)}%
+            </span>
+          ))}
         </div>
       </CardContent>
     </Card>
@@ -306,13 +359,252 @@ function Guides({ story, suggestions }: { story: string; suggestions: string[] }
   );
 }
 
-function Recommendation({ esg }:{esg:number}) {
-  if (esg < 80) return null;
+type SimpleProduct = {
+  id: string;
+  name: string;
+  key1: string;         // 핵심 수치 (예: "연 3.1%", "수수료 0.001%", "월 최대 20,000P")
+  key2?: string;        // 보조 문구 (예: "우대금리 최대 +0.3%p")
+  subtitle?: string;    // 추가 설명
+  badge?: string;       // "추천" / "NEW" / "혜택 UP" 등
+};
+
+function ProductRail({
+  title,
+  items,
+  onMore,
+}: {
+  title: string;
+  items: SimpleProduct[];
+  onMore?: () => void;
+}) {
   return (
-    <Card className="rounded-2xl shadow-sm border-emerald-600/40">
-      <CardContent className="p-4">
-        <div className="text-sm opacity-70">금융상품 추천</div>
-        <div className="text-sm mt-1">ESG {esg}점 고객 전용: 친환경 예금·펀드(우대금리 0.3%) 제안</div>
+    <div className="mt-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-medium [word-break:keep-all]">{title}</div>
+        {onMore && (
+          <Button variant="ghost" className="h-8 px-3 border rounded-xl" onClick={onMore}>
+            모두 보기
+            <ChevronRight className="w-4 h-4 ml-1" />
+          </Button>
+        )}
+      </div>
+
+      {/* 모바일: 가로 스크롤 / 데스크탑: 자동 맞춤 그리드 */}
+      <div className="overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="
+          grid gap-3
+          sm:[grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]
+          grid-flow-col auto-cols-[minmax(220px,1fr)] sm:grid-flow-row
+          min-w-max sm:min-w-0
+        ">
+          {items.map((p) => (
+            <div key={p.id} className="rounded-2xl border bg-white shadow-sm p-4 min-w-[220px]">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium [word-break:keep-all] [text-wrap:balance]">
+                  {p.name}
+                </span>
+                {p.badge && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted">
+                    {p.badge}
+                  </span>
+                )}
+              </div>
+              <div className="mt-2">
+                <div className="text-xl md:text-2xl font-bold leading-tight">{p.key1}</div>
+                {p.key2 && (
+                  <div className="text-xs text-muted-foreground [word-break:keep-all]">
+                    {p.key2}
+                  </div>
+                )}
+              </div>
+              {p.subtitle && (
+                <div className="text-[11px] text-muted-foreground mt-1 [word-break:keep-all]">
+                  {p.subtitle}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Recommendation({ esg }: { esg: number }) {
+  const router = useRouter(); // 상단 import 필요: import { useRouter } from "next/navigation";
+  const [showMore, setShowMore] = useState(false);
+
+  if (esg < 80) return null; // 항상 보이게 하려면 제거
+
+  // 여러 상품 목록 (데모 데이터)
+  const depositItems: SimpleProduct[] = [
+    { id: "dep1", name: "그린 세이브 예금", key1: "연 3.1%", key2: "우대금리 최대 +0.3%p", subtitle: "자동이체/미션 달성 시" , badge: "추천" },
+    { id: "dep2", name: "에코 플러스 적금", key1: "연 3.3%", key2: "ESG 미션 연계", subtitle: "월 적립식" },
+    { id: "dep3", name: "탄소중립 정기예금", key1: "연 3.0%", key2: "기부 연계", subtitle: "기부금 세액공제" },
+    { id: "dep4", name: "리사이클 행복예금", key1: "연 3.05%", key2: "친환경 제휴 우대", subtitle: "ATM 수수료 면제" },
+  ];
+
+  const fundItems: SimpleProduct[] = [
+    { id: "fund1", name: "ESG 인덱스 1호", key1: "수수료 0.001%", key2: "지속가능 성장", subtitle: "탄소감축 기업 중심", badge: "NEW" },
+    { id: "fund2", name: "저탄소 글로벌 펀드", key1: "수수료 0.002%", key2: "RE100 비중↑", subtitle: "해외 분산 투자" },
+    { id: "fund3", name: "그린에너지 테마", key1: "수수료 0.003%", key2: "변동성 유의", subtitle: "장기/적립 추천" },
+  ];
+
+  const cardItems: SimpleProduct[] = [
+    { id: "card1", name: "그린 체크카드", key1: "월 최대 20,000P", key2: "대중교통 5%", subtitle: "제로웨이스트 5%" , badge: "혜택 UP" },
+    { id: "card2", name: "에코 라이프 카드", key1: "월 최대 20,000P", key2: "친환경 매장 5%", subtitle: "온라인 3%" },
+    { id: "card3", name: "모빌리티 카드", key1: "월 최대 15,000P", key2: "전기차 충전 7%", subtitle: "공공자전거 5%" },
+  ];
+
+  return (
+    <Card className="rounded-2xl shadow-sm overflow-hidden border-emerald-500/40">
+      <CardContent className="p-0">
+        {/* 헤더 배너 */}
+        <div className="bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 text-white p-5 md:p-6">
+          <div className="flex items-center gap-2 text-sm opacity-90">
+            <Award className="w-4 h-4" />
+            <span>금융상품 추천</span>
+          </div>
+
+          <div className="mt-1 md:mt-2">
+            <h3 className="text-lg md:text-xl font-semibold leading-tight [text-wrap:balance]">
+              ESG {esg}점 고객님께 드리는{" "}
+              <span className="underline decoration-white/60 underline-offset-4">
+                친환경 금융 혜택
+              </span>
+            </h3>
+            <p className="text-xs md:text-sm mt-1 opacity-90">
+              우대금리·캐시백·수수료 면제까지 한 번에 확인하세요.
+            </p>
+          </div>
+
+          {/* 혜택 칩 */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <div className="px-2 py-1 rounded-full bg-white/15 backdrop-blur text-[11px] md:text-xs flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" />
+              우대금리 최대 +0.3%p
+            </div>
+            <div className="px-2 py-1 rounded-full bg-white/15 backdrop-blur text-[11px] md:text-xs flex items-center gap-1">
+              <Gift className="w-3 h-3" />
+              미션 달성 캐시백
+            </div>
+            <div className="px-2 py-1 rounded-full bg-white/15 backdrop-blur text-[11px] md:text-xs flex items-center gap-1">
+              <Leaf className="w-3 h-3" />
+              친환경 제휴 혜택
+            </div>
+          </div>
+        </div>
+
+        {/* 본문 */}
+        <div className="p-4 md:p-5 bg-background">
+          {/* ① 요약 타일 3개(그대로, 가독성 개선 버전) */}
+          <div className="overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="
+              grid gap-4
+              sm:[grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]
+              grid-flow-col auto-cols-[minmax(220px,1fr)] sm:grid-flow-row
+              min-w-max sm:min-w-0
+            ">
+              {/* 예금(요약) */}
+              <div className="rounded-2xl border bg-white shadow-sm p-4 min-w-[220px]">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium [word-break:keep-all] [text-wrap:balance]">
+                    친환경 정기예금
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    추천
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <div className="text-xl md:text-2xl font-bold leading-tight">연 3.1%</div>
+                  <div className="text-xs text-muted-foreground [word-break:keep-all]">
+                    우대금리 최대 +0.3%p
+                  </div>
+                </div>
+              </div>
+
+              {/* 펀드(요약) */}
+              <div className="rounded-2xl border bg-white shadow-sm p-4 min-w-[220px]">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium [word-break:keep-all] [text-wrap:balance]">
+                    ESG 인덱스 펀드
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                    NEW
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <div className="text-xl md:text-2xl font-bold leading-tight">수수료 0.001%</div>
+                  <div className="text-xs text-muted-foreground [word-break:keep-all]">
+                    탄소감축 기업 중심
+                  </div>
+                </div>
+              </div>
+
+              {/* 카드(요약) */}
+              <div className="rounded-2xl border bg-white shadow-sm p-4 min-w-[220px]">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium [word-break:keep-all] [text-wrap:balance]">
+                    그린 체크/신용카드
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                    혜택 UP
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <div className="text-xl md:text-2xl font-bold leading-tight">월 최대 20,000P</div>
+                  <div className="text-xs text-muted-foreground [word-break:keep-all]">
+                    대중교통·제로웨이스트 적합
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ② “추천 상품 더 보기” 토글 */}
+          <div className="mt-3">
+            <Button
+              variant="ghost"
+              className="h-8 px-3 border rounded-xl"
+              onClick={() => setShowMore((v) => !v)}
+            >
+              {showMore ? "추천 목록 접기" : "추천 상품 더 보기"}
+              <ChevronRight className={`w-4 h-4 ml-1 transition-transform ${showMore ? "rotate-90" : ""}`} />
+            </Button>
+          </div>
+
+          {/* ③ 확장 목록(여러 개씩) */}
+          {showMore && (
+            <>
+              <ProductRail
+                title="정기예금/적금"
+                items={depositItems}
+                onMore={() => router.push(`/products?esg=${esg}`)}
+              />
+              <ProductRail
+                title="ESG 펀드"
+                items={fundItems}
+                onMore={() => router.push(`/products?esg=${esg}`)}
+              />
+              <ProductRail
+                title="체크/신용카드"
+                items={cardItems}
+                onMore={() => router.push(`/products?esg=${esg}`)}
+              />
+            </>
+          )}
+
+          {/* CTA */}
+          <div className="mt-4 flex flex-col sm:flex-row gap-2">
+            <Button className="h-9 rounded-xl" onClick={() => router.push(`/products?esg=${esg}`)}>
+              상품 비교하기
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+            <Button variant="ghost" className="h-9 rounded-xl border" onClick={() => router.push(`/benefits?esg=${esg}`)}>
+              내 혜택 계산
+            </Button>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -466,6 +758,71 @@ function TxnSimulator({ onCreate }: { onCreate: (t: Transaction) => void }) {
   );
 }
 
+// 지난달 절감량(g) 추론: 프로젝트 데이터에 맞게 여기만 연결하세요.
+function inferPrevMonthSavingG(report: any, prevTotal?: number, totalNow?: number) {
+  // 1) 보고서에 월 단위가 있으면 우선 사용
+  const prev = Number(report?.prev_month_gco2e ?? prevTotal ?? 0);
+  const curr = Number(report?.current_month_gco2e ?? report?.total_gco2e ?? totalNow ?? 0);
+  // 절감 = 지난달 - 이번달 (감소한 만큼만 코인)
+  return Math.max(prev - curr, 0);
+}
+
+function CoinWallet({ prevMonthSavingG }: { prevMonthSavingG: number }) {
+  const router = useRouter();
+  const [balance, setBalance] = useState<number>(0);
+  const [awarded, setAwarded] = useState<number>(0);
+
+  useEffect(() => {
+    const st = loadCoinState(100);
+    setBalance(st.balance || 0);
+
+    const gained = maybeAutoAward(prevMonthSavingG);
+    if (gained > 0) {
+      const ns = loadCoinState();
+      setBalance(ns.balance);
+      setAwarded(gained);
+    }
+  }, [prevMonthSavingG]);
+
+  return (
+    <Card className="rounded-2xl shadow-sm">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Coins className="w-4 h-4 text-emerald-600" />
+          <div className="text-sm font-medium">친환경 코인 지갑</div>
+        </div>
+
+        <div className="flex items-baseline gap-2">
+          <div className="text-2xl font-bold">{balance.toLocaleString()} C</div>
+          <div className="text-xs text-muted-foreground">1kg CO₂ 절감 = 1C</div>
+        </div>
+
+        {awarded > 0 && (
+          <div className="text-xs rounded-xl px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 inline-block">
+            이번 달 1주차 자동지급: +{awarded}C
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 gap-2 pt-1">
+          <Button className="h-9 rounded-xl" onClick={() => (window.location.href = "/rewards")}>
+            교환/구매
+            </Button>
+            <Button variant="ghost" className="h-9 rounded-xl border" onClick={() => (window.location.href = "/invest")}>
+              투자하기
+            </Button>
+            <Button variant="ghost" className="h-9 rounded-xl border" onClick={() => (window.location.href = "/wallet")}>
+              내역 보기
+            </Button>
+        </div>
+
+        <div className="text-[11px] text-muted-foreground">
+          전기차 충전권·친환경 가전/패션·재생에너지 상품 교환, ESG 펀드/탄소절감채권 투자에 사용 가능
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 /* =========================
    Page
 ========================= */
@@ -508,6 +865,12 @@ export default function Page() {
   const prevTotal = useMemo(
     () => buildMonthlyReport(prevRangeTxns).total_gco2e,
     [prevRangeTxns]
+  );
+
+  // ✅ 추가: 지난달 대비 절감량(g) 계산 → 코인지급 기준
+  const prevMonthSavingG = useMemo(
+    () => Math.max(prevTotal - report.total_gco2e, 0),
+    [prevTotal, report.total_gco2e]
   );
 
   // 목표 달성 → 리워드 지급 (1회/월 가정)
@@ -567,15 +930,28 @@ export default function Page() {
         {/* 거래 시뮬레이터 */}
         <TxnSimulator onCreate={createTxn} />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* 왼쪽: 거래 + 차트들 */}
+          <div className="lg:col-span-8 space-y-4">
             <TxnTable items={filtered} onSelect={(e) => setSelected(e)} />
+
+            {/* 차트 2개를 왼쪽에 배치해 좌우 균형 맞춤 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="h-[240px]">
+                <TrendChart data={trend} />
+              </div>
+              <div className="h-[240px]">
+                <CategoryPie top={report.top_categories} />
+              </div>
+            </div>
           </div>
-          <div className="space-y-4">
-            <TrendChart data={trend} />
-            <CategoryPie top={report.top_categories} />
-            <Guides story={report.story} suggestions={report.suggestions} />
+
+          {/* 오른쪽: ✅ 코인지갑 + 추천 + 가이드 (필요시 고정) */}
+          <div className="lg:col-span-4 space-y-4 lg:sticky lg:top-4">
+            {/* 지난달 절감량(g)을 전달 → (매달 1주차) 자동 코인지급 */}
+            <CoinWallet prevMonthSavingG={prevMonthSavingG} />
             <Recommendation esg={report.esg} />
+            <Guides story={report.story} suggestions={report.suggestions} />
           </div>
         </div>
 
@@ -586,3 +962,5 @@ export default function Page() {
     </TooltipProvider>
   );
 }
+
+
