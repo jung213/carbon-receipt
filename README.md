@@ -35,19 +35,6 @@ npm install
 npm run dev
 http://localhost:3000
 
-환경변수 (.env.local)
-
-# App
-NEXT_PUBLIC_APP_NAME=Carbon Receipt
-NEXT_PUBLIC_DEFAULT_CURRENCY=KRW
-NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api
-
-# Features
-NEXT_PUBLIC_FEATURE_REWARDS=true
-NEXT_PUBLIC_CO2_FACTORS_VERSION=v1
-
-
-
 # 화면 예시
 
 <img width="556" height="403" alt="image" src="https://github.com/user-attachments/assets/ef729211-05ae-425c-ab6a-14a038f6dc35" />   
