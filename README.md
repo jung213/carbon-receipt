@@ -50,9 +50,9 @@ NEXT_PUBLIC_CO2_FACTORS_VERSION=v1
 
 # 화면 예시
 
-<img width="556" height="403" alt="image" src="https://github.com/user-attachments/assets/ef729211-05ae-425c-ab6a-14a038f6dc35" />
-<img width="424" height="574" alt="image" src="https://github.com/user-attachments/assets/551ccc9b-2850-460c-ada2-cb52fbc5937d" />
-<img width="670" height="388" alt="image" src="https://github.com/user-attachments/assets/9a73e64b-ee47-4200-b042-692cd01d9aa9" />
-<img width="661" height="344" alt="image" src="https://github.com/user-attachments/assets/fd784d91-7144-4ecb-9399-5c2370b96d4a" />
+<img width="556" height="403" alt="image" src="https://github.com/user-attachments/assets/ef729211-05ae-425c-ab6a-14a038f6dc35" />   
+<img width="424" height="574" alt="image" src="https://github.com/user-attachments/assets/551ccc9b-2850-460c-ada2-cb52fbc5937d" />         
+<img width="670" height="388" alt="image" src="https://github.com/user-attachments/assets/9a73e64b-ee47-4200-b042-692cd01d9aa9" />    
+<img width="661" height="344" alt="image" src="https://github.com/user-attachments/assets/fd784d91-7144-4ecb-9399-5c2370b96d4a" />     
 
 
