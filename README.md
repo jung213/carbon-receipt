@@ -27,8 +27,8 @@ State/Utils: (예) Zustand/React Query, dayjs
 실제 package.json 기준으로 항목을 조정하세요.
 
 # 1) 설치
-git clone https://github.com/jung213/carbon-receipt.git
-cd carbon-receipt
+git clone https://github.com/jung213/carbon-receipt.git  
+cd carbon-receipt  
 npm install
 
 # 2) 개발 서버
@@ -36,6 +36,7 @@ npm run dev
 http://localhost:3000
 
 환경변수 (.env.local)
+
 # App
 NEXT_PUBLIC_APP_NAME=Carbon Receipt
 NEXT_PUBLIC_DEFAULT_CURRENCY=KRW
