@@ -47,7 +47,7 @@ NEXT_PUBLIC_CO2_FACTORS_VERSION=v1
 
 
 
-#화면 예시
+# 화면 예시
 
 <img width="556" height="403" alt="image" src="https://github.com/user-attachments/assets/ef729211-05ae-425c-ab6a-14a038f6dc35" />
 <img width="424" height="574" alt="image" src="https://github.com/user-attachments/assets/551ccc9b-2850-460c-ada2-cb52fbc5937d" />
